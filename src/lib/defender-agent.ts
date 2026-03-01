@@ -6,7 +6,7 @@ import { emitEvent } from './sse-emitter';
 import { nanoid } from 'nanoid';
 import { getAnthropicApiKey } from './env';
 import { initLaminar } from './laminar';
-import { recordDefenderAction, finalizeGame, recordHealthChange } from './data-collector';
+import { recordDefenderAction, finalizeGame, recordHealthChange, captureAndUploadScreenshot } from './data-collector';
 import type { DisruptionEvent } from '@/types/game';
 import type { DefenderDisruptionPayload, HealthUpdatePayload, TurnChangePayload } from '@/types/events';
 
@@ -31,8 +31,6 @@ const HEALTH_DECAY_PER_SEC: Record<string, number> = {
 export function startDefenderLoop(gameId: string): void {
   const session = getSession(gameId);
   if (!session) return;
-
-  console.log(`[defender] startDefenderLoop mode=${session.mode} difficulty=${session.difficulty}`);
 
   if (session.mode === 'turnbased') {
     // Turn-based: no timers, no health decay — defender waits for signal from attacker
@@ -328,8 +326,17 @@ async function runDefenderTurn(gameId: string): Promise<void> {
     payload = disruption.generatePayload();
   }
 
+  // Screenshot before injection
+  const beforeScreenshotId = await captureAndUploadScreenshot(session.cdpUrl).catch(() => null);
+  const domSnap = await snapshotDOM(session.cdpUrl).catch(() => null);
+
   const success = await injectJS(session.cdpUrl, payload);
   console.log(`[defender] ${disruption.name} → ${success ? 'HIT' : 'MISS'} (${disruption.healthDamage} HP)`);
+
+  // Screenshot after injection (brief delay to let DOM changes render)
+  const afterScreenshotId = success
+    ? await new Promise<string | null>(r => setTimeout(() => captureAndUploadScreenshot(session.cdpUrl).then(r).catch(() => r(null)), 500))
+    : null;
 
   session.defenderCooldowns.set(disruption.id, session.mode === 'turnbased' ? session.turnNumber : Date.now());
 
@@ -358,6 +365,9 @@ async function runDefenderTurn(gameId: string): Promise<void> {
     timestamp: event.timestamp,
     injectionPayload: payload.slice(0, 5000),
     attackerStepAtTime: session.attackerSteps.length,
+    domSnapshot: domSnap ?? undefined,
+    screenshotBeforeId: beforeScreenshotId ?? undefined,
+    screenshotAfterId: afterScreenshotId ?? undefined,
   });
 
   // Damage health
@@ -416,10 +426,11 @@ export function endGame(
   session.winReason = reason;
   session.endedAt = new Date().toISOString();
 
-  // Stop loops
+  // Stop loops and cleanup
   if (session.defenderLoopHandle) clearTimeout(session.defenderLoopHandle);
   if (session.healthDecayHandle) clearInterval(session.healthDecayHandle);
   if (session.attackerAbort) session.attackerAbort.abort();
+  if (session.stopNetworkCapture) { session.stopNetworkCapture(); session.stopNetworkCapture = null; }
 
   // Resolve turn-based gates so coroutines unblock and exit
   if (session.attackerGate) {

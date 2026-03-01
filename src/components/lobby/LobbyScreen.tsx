@@ -1,19 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { GlitchText } from '@/components/shared/GlitchText';
 import { DifficultySelector } from './DifficultySelector';
+import { ModeSelector } from './ModeSelector';
 import { TaskSelector } from './TaskSelector';
 import { StartButton } from './StartButton';
-import type { Difficulty, Task } from '@/types/game';
+import type { Difficulty, GameMode, Task } from '@/types/game';
 
 interface Props {
-  onStart: (difficulty: Difficulty, task: Task) => void;
+  onStart: (difficulty: Difficulty, task: Task, mode: GameMode) => void;
 }
 
 export function LobbyScreen({ onStart }: Props) {
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [task, setTask] = useState<Task | null>(null);
+  const [mode, setMode] = useState<GameMode>('realtime');
 
   const canStart = !!task;
 
@@ -49,6 +52,7 @@ export function LobbyScreen({ onStart }: Props) {
         }}
       >
         <TaskSelector value={task} onChange={setTask} />
+        <ModeSelector value={mode} onChange={setMode} />
         <DifficultySelector value={difficulty} onChange={setDifficulty} />
 
         {/* Info row */}
@@ -59,13 +63,16 @@ export function LobbyScreen({ onStart }: Props) {
           <span>Session: <span style={{ color: 'var(--color-text-primary)' }}>Browserbase</span></span>
         </div>
 
-        <StartButton onClick={() => task && onStart(difficulty, task)} disabled={!canStart} />
+        <StartButton onClick={() => task && onStart(difficulty, task, mode)} disabled={!canStart} />
       </div>
 
       {/* Footer */}
-      <div className="mt-8 text-xs font-mono text-center"
+      <div className="mt-8 flex items-center gap-4 text-xs font-mono"
         style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}>
-        An AI agent will attempt your task · A defender agent will try to stop it
+        <span>An AI agent will attempt your task · A defender agent will try to stop it</span>
+        <Link href="/history" className="neon-cyan opacity-100 hover:underline">
+          History
+        </Link>
       </div>
     </div>
   );

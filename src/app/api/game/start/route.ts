@@ -6,7 +6,8 @@ import { startDefenderLoop, endGame } from '@/lib/defender-agent';
 import { emitEvent } from '@/lib/sse-emitter';
 import { TASKS } from '@/lib/tasks';
 import { runAttackerLoop } from '@/lib/attacker-agent';
-import { createGameRecord } from '@/lib/data-collector';
+import { createGameRecord, recordNetworkRequest } from '@/lib/data-collector';
+import { startNetworkCapture } from '@/lib/browserbase';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -67,6 +68,20 @@ export async function POST(req: NextRequest) {
     attackerModel: 'claude-sonnet-4-20250514',
     defenderModel: 'claude-haiku-4-5-20251001',
   });
+
+  // 2c. Start network request capture via CDP
+  startNetworkCapture(cdpUrl, (req) => {
+    recordNetworkRequest({
+      gameId,
+      method: req.method,
+      url: req.url,
+      status: req.status,
+      resourceType: req.resourceType,
+      responseSize: req.responseSize,
+    });
+  }).then(stopFn => {
+    if (stopFn) session.stopNetworkCapture = stopFn;
+  }).catch(() => {});
 
   // 3. Transition to arena
   session.phase = 'arena';

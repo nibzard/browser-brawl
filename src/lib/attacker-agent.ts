@@ -7,7 +7,8 @@ import { endGame } from './defender-agent';
 import { nanoid } from 'nanoid';
 import { getAnthropicApiKey } from './env';
 import { initLaminar } from './laminar';
-import { recordAttackerStep } from './data-collector';
+import { recordAttackerStep, captureAndUploadScreenshot } from './data-collector';
+import { snapshotDOM } from './browserbase';
 import type { AttackerStepPayload, TurnChangePayload } from '@/types/events';
 
 // Initialize Laminar before creating Anthropic client so all calls are traced
@@ -92,6 +93,12 @@ IMPORTANT:
         defenderStatus: s.defenderStatus,
       });
 
+      // Capture screenshot + DOM snapshot before Claude call (fire-and-forget on failure)
+      const [preScreenshotId, domSnap] = await Promise.all([
+        captureAndUploadScreenshot(session.cdpUrl).catch(() => null),
+        snapshotDOM(session.cdpUrl).catch(() => null),
+      ]);
+
       // Call Claude (pass abort signal so the request is cancelled on game end)
       console.log(`[attacker] Step ${stepNumber + 1} — calling Claude...`);
       const response = await anthropic.messages.create({
@@ -135,6 +142,8 @@ IMPORTANT:
           description: finalText.slice(0, 200),
           agentStatus: isComplete ? 'complete' : 'acting',
           timestamp: new Date().toISOString(),
+          domSnapshot: domSnap ?? undefined,
+          screenshotBeforeId: preScreenshotId ?? undefined,
         });
 
         if (isComplete) {
@@ -215,7 +224,7 @@ IMPORTANT:
           });
         }
 
-        // Persist tool step to Convex
+        // Persist tool step to Convex (screenshot = page state before this action)
         recordAttackerStep({
           gameId,
           stepNumber,
@@ -225,6 +234,8 @@ IMPORTANT:
           description,
           agentStatus: 'acting',
           timestamp: new Date().toISOString(),
+          domSnapshot: domSnap ?? undefined,
+          screenshotBeforeId: preScreenshotId ?? undefined,
         });
       }
 
@@ -232,7 +243,6 @@ IMPORTANT:
       messages.push({ role: 'user', content: toolResults });
 
       // Turn-based: check if attacker's turn is exhausted
-      console.log(`[attacker] mode=${s.mode} stepsThisTurn=${s.attackerStepsThisTurn}/${s.attackerStepsPerTurn}`);
       if (s.mode === 'turnbased' && toolUses.length > 0) {
         s.attackerStepsThisTurn++;
 

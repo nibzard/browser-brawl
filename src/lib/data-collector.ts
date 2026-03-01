@@ -75,6 +75,10 @@ export function recordAttackerStep(params: {
   agentStatus: string;
   timestamp: string;
   domSnapshot?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  screenshotBeforeId?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  screenshotAfterId?: any;
 }): void {
   const c = getClient();
   if (!c) return;
@@ -96,6 +100,10 @@ export function recordDefenderAction(params: {
   timestamp: string;
   injectionPayload?: string;
   domSnapshot?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  screenshotBeforeId?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  screenshotAfterId?: any;
   attackerStepAtTime?: number;
 }): void {
   const c = getClient();
@@ -165,7 +173,25 @@ export function recordNetworkRequest(params: {
   );
 }
 
-// ── Screenshot upload ──────────────────────────────────────────────
+// ── Screenshot capture + upload ──────────────────────────────────
+
+/**
+ * Capture a screenshot from the browser and upload to Convex in one call.
+ * Returns the Convex storage ID, or null on failure.
+ */
+export async function captureAndUploadScreenshot(
+  cdpUrl: string,
+): Promise<string | null> {
+  try {
+    const { captureScreenshot } = await import('./browserbase');
+    const png = await captureScreenshot(cdpUrl);
+    if (!png) return null;
+    return await uploadScreenshot(png);
+  } catch (err) {
+    console.error('[data-collector] captureAndUpload error:', err);
+    return null;
+  }
+}
 
 export async function uploadScreenshot(
   pngBuffer: Buffer,
