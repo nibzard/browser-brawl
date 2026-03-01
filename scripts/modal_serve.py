@@ -1,21 +1,22 @@
 """
 Serve a fine-tuned Browser Brawl model via vLLM on Modal.
 
-Exposes an OpenAI-compatible /v1/chat/completions endpoint.
+Exposes an OpenAI-compatible /chat endpoint.
 The attacker connects via FINETUNED_MODEL_URL in .env.local.
 
+Deployed ONCE — each experiment is served via ?experiment_name= query param.
+Modal's parametrized functions create a separate auto-scaling container pool
+per unique experiment_name, each loading its own merged model.
+
 Usage:
-  # Deploy permanently (stable URL):
-  modal deploy scripts/modal_serve.py --name <experiment-name>
+  # Deploy once (universal endpoint for all experiments):
+  modal deploy scripts/modal_serve.py
 
-  # Serve temporarily (URL active while running, cheaper for testing):
-  modal serve scripts/modal_serve.py --name <experiment-name>
+  # URL for any experiment:
+  # https://mehulkalia--browser-brawl-serve-model-chat.modal.run?experiment_name=text-20260301
 
-  # The deployed URL will look like:
-  # https://mehulkalia--browser-brawl-serve-app-serve.modal.run
-
-  # Set in .env.local:
-  # FINETUNED_MODEL_URL=https://mehulkalia--browser-brawl-serve-app-serve.modal.run
+  # Set in .env.local (for a specific experiment):
+  # FINETUNED_MODEL_URL=https://mehulkalia--browser-brawl-serve-model-chat.modal.run?experiment_name=text-20260301
 """
 
 import modal
@@ -28,7 +29,7 @@ serve_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
         "vllm==0.8.5",
-        "fastapi[standard]==0.115.12",
+        "fastapi[standard]",
         "huggingface_hub==0.34.2",
         "hf-transfer==0.1.9",
     )
@@ -52,10 +53,10 @@ checkpoint_vol = modal.Volume.from_name("browser-brawl-checkpoints",  create_if_
         "/model_cache":  model_cache,
         "/checkpoints":  checkpoint_vol,
     },
-    timeout=60 * 60,           # 1 hour max per request
-    allow_concurrent_inputs=8, # vLLM handles batching internally
-    scaledown_window=300,      # Keep warm 5 min after last request
+    timeout=60 * 60,       # 1 hour max per request
+    scaledown_window=300,  # Keep warm 5 min after last request
 )
+@modal.concurrent(max_inputs=8)  # vLLM handles batching internally
 class Model:
     # experiment_name is set via --name when deploying
     experiment_name: str = modal.parameter(default="")
@@ -68,8 +69,8 @@ class Model:
 
         if not self.experiment_name:
             raise ValueError(
-                "Pass --name <experiment-name> when running modal serve/deploy.\n"
-                "Example: modal deploy scripts/modal_serve.py --name text-20260228-2221"
+                "experiment_name parameter is required.\n"
+                "Pass it as a URL query param: ?experiment_name=text-20260301"
             )
 
         model_path = f"/checkpoints/experiments/{self.experiment_name}/merged_model"
@@ -85,7 +86,7 @@ class Model:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         print("[serve] Model ready.", flush=True)
 
-    @modal.web_endpoint(method="POST", docs=True)
+    @modal.fastapi_endpoint(method="POST", docs=True)
     async def chat(self, request: dict) -> dict:
         """
         OpenAI-compatible chat completions endpoint.
@@ -146,7 +147,7 @@ class Model:
             },
         }
 
-    @modal.web_endpoint(method="GET")
+    @modal.fastapi_endpoint(method="GET")
     def health(self) -> dict:
         """Health check — returns model name if loaded."""
         return {"status": "ok", "experiment": self.experiment_name}

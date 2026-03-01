@@ -56,6 +56,10 @@ checkpoint_vol = modal.Volume.from_name("browser-brawl-checkpoints",   create_if
 
 # ── Training config ───────────────────────────────────────────────────────────
 
+# Universal serve endpoint — deployed once, each experiment_name query param
+# gets its own auto-scaling container pool via modal.parameter().
+SERVE_BASE_URL = "https://mehulkalia--browser-brawl-serve-model-chat.modal.run"
+
 TEXT_ONLY_MODEL = "unsloth/Qwen2.5-3B-Instruct"
 LORA_R = 16
 LORA_ALPHA = 16
@@ -129,8 +133,7 @@ def train(
 
         # ── Phase 3: Done ─────────────────────────────────────────────────
         model_path = f"/checkpoints/experiments/{experiment_name}/merged_model"
-        # URL pattern: https://<workspace>--<name>-model-chat.modal.run?experiment_name=<name>
-        serve_url = f"https://mehulkalia--{experiment_name}-model-chat.modal.run?experiment_name={experiment_name}"
+        serve_url = f"{SERVE_BASE_URL}?experiment_name={experiment_name}"
 
         update_convex_status(
             convex_site_url, experiment_name,
@@ -139,9 +142,7 @@ def train(
         )
         print(f"[pipeline] Training complete: {experiment_name}", flush=True)
         print(f"[pipeline] Merged model at: {model_path} (on browser-brawl-checkpoints volume)", flush=True)
-        print(f"[pipeline] To serve, run:", flush=True)
-        print(f"[pipeline]   modal deploy scripts/modal_serve.py --name {experiment_name}", flush=True)
-        print(f"[pipeline] Serve URL: {serve_url}", flush=True)
+        print(f"[pipeline] Serve URL (live immediately): {serve_url}", flush=True)
         return {
             "status": "complete",
             "experiment_name": experiment_name,

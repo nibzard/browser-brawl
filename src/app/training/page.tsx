@@ -191,17 +191,11 @@ export default function TrainingPage() {
                         >
                           <div className="font-bold mb-1" style={{ color: '#cc44ff' }}>Serve URL</div>
                           <div className="truncate" style={{ color: 'var(--color-text-primary)' }}>{job.serveUrl}</div>
+                          <div className="mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                            First request cold-starts (~2min)
+                          </div>
                         </div>
                       )}
-                      <div
-                        className="font-mono text-xs p-2 rounded"
-                        style={{ background: '#22c55e10', border: '1px solid #22c55e30' }}
-                      >
-                        <div className="font-bold mb-1" style={{ color: '#22c55e' }}>Deploy</div>
-                        <div style={{ color: 'var(--color-text-primary)' }}>
-                          modal deploy scripts/modal_serve.py --name {job.experimentName}
-                        </div>
-                      </div>
                       <div
                         className="font-mono text-xs p-2 rounded"
                         style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}

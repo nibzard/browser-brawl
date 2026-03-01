@@ -379,10 +379,13 @@ https://mehulkalia--{experiment_name}-model-chat.modal.run?experiment_name={expe
 - `browser-brawl-training-data` — Training data input (mounted at `/data`)
 - `browser-brawl-checkpoints` — Outputs: LoRA adapters + merged models (mounted at `/checkpoints`)
 
-**To serve a trained model** (still a manual step after pipeline completes):
+**Serving** — deploy once, works for all experiments automatically:
 ```bash
-modal deploy scripts/modal_serve.py --name <experiment-name>
-# Sets FINETUNED_MODEL_URL in .env.local to the serve URL shown on /training page
+modal deploy scripts/modal_serve.py   # one-time setup
+# URL pattern: https://mehulkalia--browser-brawl-serve-model-chat.modal.run?experiment_name=<name>
+# Each ?experiment_name= value gets its own auto-scaling container pool (modal.parameter)
+# First request for a new experiment cold-starts (~2min to load model into vLLM)
+# Set in .env.local: FINETUNED_MODEL_URL=https://mehulkalia--browser-brawl-serve-model-chat.modal.run?experiment_name=<name>
 ```
 
 **To download locally:**
