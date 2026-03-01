@@ -63,16 +63,26 @@ export function LobbyScreen({ onStart }: Props) {
           <span>Session: <span style={{ color: 'var(--color-text-primary)' }}>Browserbase</span></span>
         </div>
 
-        <StartButton onClick={() => task && onStart(difficulty, task, mode)} disabled={!canStart} />
+        <div className="flex gap-3">
+          <StartButton onClick={() => task && onStart(difficulty, task, mode)} disabled={!canStart} />
+          <Link
+            href="/history"
+            className="flex-shrink-0 px-5 py-3 rounded font-display text-sm font-bold tracking-widest uppercase transition-all duration-200 hover:scale-105 flex items-center"
+            style={{
+              background: 'var(--color-bg-card)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            History
+          </Link>
+        </div>
       </div>
 
       {/* Footer */}
-      <div className="mt-8 flex items-center gap-4 text-xs font-mono"
+      <div className="mt-8 text-xs font-mono"
         style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}>
         <span>An AI agent will attempt your task · A defender agent will try to stop it</span>
-        <Link href="/history" className="neon-cyan opacity-100 hover:underline">
-          History
-        </Link>
       </div>
     </div>
   );

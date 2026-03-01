@@ -61,7 +61,7 @@ export default function Home() {
     return (
       <>
         <ArenaScreen state={state} onAbort={() => {}} />
-        <WinnerBanner winner={state.winner} reason={state.winReason} onPlayAgain={reset} />
+        <WinnerBanner winner={state.winner} reason={state.winReason} sessionId={state.sessionId} onPlayAgain={reset} />
       </>
     );
   }
