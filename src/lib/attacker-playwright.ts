@@ -6,13 +6,14 @@ import { emitEvent } from './sse-emitter';
 import { endGame } from './defender-agent';
 import { nanoid } from 'nanoid';
 import { initLaminar } from './laminar';
+import { getAnthropicApiKey } from './env';
 import { recordAttackerStep, captureAndUploadScreenshot } from './data-collector';
 import { snapshotDOM } from './browserbase';
 import type { AttackerStepPayload, TurnChangePayload } from '@/types/events';
 
 // Initialize Laminar before creating Anthropic client so all calls are traced
 initLaminar();
-const anthropic = new Anthropic();
+const anthropic = new Anthropic({ apiKey: getAnthropicApiKey() });
 
 /**
  * Run the attacker agent loop using Playwright MCP + Anthropic SDK:
@@ -26,8 +27,9 @@ export async function runAttackerLoop(gameId: string, signal: AbortSignal): Prom
   if (!session) return;
 
   // 1. Spawn Playwright MCP as a child process connected to the remote browser
+  const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const transport = new StdioClientTransport({
-    command: 'npx',
+    command: npxCommand,
     args: [
       '@playwright/mcp@latest',
       '--cdp-endpoint', session.cdpUrl,
