@@ -166,7 +166,7 @@ Standalone CLI in `defender/src/` — separate from the integrated game.
 
 | Data | Storage | How |
 |------|---------|-----|
-| Full Claude conversations (messages + responses) | Laminar | Auto-instrumented via SDK hook |
+| Full Claude conversations (messages + responses) | Laminar + Convex `conversations` table | Laminar: auto-instrumented via SDK hook. Convex: `recordConversation()` persists full `messages` array + tool definitions after each Claude turn |
 | Game sessions (task, difficulty, winner, duration) | Convex `sessions` table | `createGameRecord()` on start, `finalizeGame()` on end |
 | Attacker steps (tool name, input, result, description) | Convex `attackerSteps` table | `recordAttackerStep()` after each Claude call |
 | Defender actions (disruption, reasoning, payload, success) | Convex `defenderActions` table | `recordDefenderAction()` after each disruption |
@@ -181,7 +181,7 @@ Standalone CLI in `defender/src/` — separate from the integrated game.
 
 Thin wrapper around `ConvexHttpClient`. All game loop files call this instead of Convex directly. Every call is fire-and-forget (errors logged, never thrown — never blocks the game).
 
-Key functions: `createGameRecord()`, `finalizeGame()`, `recordAttackerStep()`, `recordDefenderAction()`, `recordHealthChange()`, `recordSSEEvent()`, `recordNetworkRequest()`, `captureAndUploadScreenshot()`, `setSessionRecording()`
+Key functions: `createGameRecord()`, `finalizeGame()`, `recordAttackerStep()`, `recordDefenderAction()`, `recordHealthChange()`, `recordSSEEvent()`, `recordNetworkRequest()`, `captureAndUploadScreenshot()`, `setSessionRecording()`, `recordConversation()`
 
 ### Screencast — `src/lib/screencast.ts`
 
@@ -189,9 +189,9 @@ CDP `Page.startScreencast` captures JPEG frames at ~1fps during gameplay. Frames
 
 ### Convex Schema — `convex/schema.ts`
 
-Tables: `sessions`, `attackerSteps`, `defenderActions`, `healthTimeline`, `eventsLog`, `networkRequests`
+Tables: `sessions`, `attackerSteps`, `defenderActions`, `healthTimeline`, `eventsLog`, `networkRequests`, `conversations`
 
-Mutations/queries in: `convex/sessions.ts`, `convex/steps.ts`, `convex/health.ts`, `convex/events.ts`, `convex/screenshots.ts`, `convex/network.ts`
+Mutations/queries in: `convex/sessions.ts`, `convex/steps.ts`, `convex/health.ts`, `convex/events.ts`, `convex/screenshots.ts`, `convex/network.ts`, `convex/conversations.ts`
 
 ### History & Replay UI
 
@@ -217,6 +217,50 @@ Shared `initLaminar()` — called once by each agent, idempotent. Instruments th
 
 Wraps app with `ConvexProvider` if `NEXT_PUBLIC_CONVEX_URL` is set, otherwise renders children directly (graceful degradation).
 
+## Training Pipeline (Fine-Tuning)
+
+### Goal
+
+Fine-tune **Qwen2.5-VL-3B** (~3.6B params, Apache 2.0, multimodal vision-language model) on Browser Brawl game replay data for browser agent tasks. Evaluate against **MiniWob++** benchmark.
+
+### Full Conversation Persistence — `convex/conversations.ts`
+
+The `conversations` table stores the complete Claude `messages` array (reasoning text, `tool_use` blocks, and full tool results) after each Claude turn. This is the critical training data — the decomposed `attackerSteps` table only stores truncated summaries.
+
+**Table schema:**
+```
+conversations: {
+  gameId: string (indexed with stepNumber),
+  stepNumber: number,
+  messages: string (JSON — full Anthropic messages array up to this point),
+  toolDefinitions: string (JSON — 22 Playwright MCP tool schemas),
+  timestamp: string
+}
+```
+
+**How it works:**
+- `attacker-playwright.ts` calls `recordConversation()` twice per loop iteration: once after Claude responds (assistant turn), once after tool results are appended (complete turn)
+- For a typical 30-step game, the table holds ~60 rows. The last row contains the complete conversation.
+- `toolResultSummary` in `attackerSteps` is truncated to 5,000 chars (was 500). Full tool results are preserved untruncated in the `conversations` table.
+- Temporary `[training-data]` debug logs in `attacker-playwright.ts` and `data-collector.ts` should be removed before merging to main.
+
+**Bulk export query:** `sessions.listSuccessful` returns up to 1,000 sessions where `winner === 'attacker'` and `winReason === 'task_complete'`.
+
+### Tests
+
+- **Framework:** vitest (devDependency)
+- **Test file:** `src/lib/__tests__/conversation-persistence.test.ts` — 8 tests covering JSON serialization roundtrip, truncation limits, and graceful degradation when Convex is unavailable
+- **Run:** `npx vitest run`
+
+### Pipeline Phases (Planned)
+
+1. **Data extraction** — `scripts/extract-training-data.ts`: Convex → raw JSONL (one trajectory per line) with screenshots
+2. **Format conversion** — `scripts/convert-to-sharegpt.ts`: Anthropic tool format → ShareGPT with OpenAI-style function calling for Axolotl
+3. **Data farming** — Headless game runner to generate 500+ successful trajectories
+4. **Fine-tuning** — Axolotl + Unsloth on Modal A100, QLoRA on Qwen2.5-VL-3B-Instruct
+5. **Evaluation** — In-distribution (Browser Brawl held-out set) + out-of-distribution (MiniWob++)
+6. **Adversarial specialization** — DPO with successful vs failed trajectories, disruption-annotated data
+
 ## Current Status
 
 The game is fully playable end-to-end:
@@ -225,7 +269,8 @@ The game is fully playable end-to-end:
 - Custom injections generate targeted JS that hides search results, disables add-to-cart buttons, blocks clicks, etc.
 - Health system works — defender wins by depleting health, attacker wins by completing the task
 - SSE streaming, live browser view, and game over detection all functional
-- Full training data pipeline: Laminar traces LLM calls, Convex stores structured game data, screenshots, DOM snapshots, network requests, and screencast recordings
+- Full training data pipeline: Laminar traces LLM calls, Convex stores structured game data, full Claude conversations, screenshots, DOM snapshots, network requests, and screencast recordings
+- Full conversation persistence to Convex `conversations` table — complete messages array with reasoning, tool calls, and untruncated tool results persisted after each Claude turn
 - History/replay UI with session list, filters, step-by-step replay, video playback, and CSV export
 
 ### Known Issues
