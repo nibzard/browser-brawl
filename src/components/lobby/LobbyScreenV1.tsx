@@ -151,13 +151,22 @@ export function LobbyScreenV1({ onStart }: Props) {
         }}
       >
         <div className="w-full max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6 px-4">
-          <Link
-            href="/history"
-            className="order-2 sm:order-1 font-mono text-[10px] tracking-wider transition-all duration-200 hover:underline"
-            style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}
-          >
-            [ MATCH HISTORY ]
-          </Link>
+          <div className="order-2 sm:order-1 flex gap-4">
+            <Link
+              href="/history"
+              className="font-mono text-[10px] tracking-wider transition-all duration-200 hover:underline"
+              style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}
+            >
+              [ MATCH HISTORY ]
+            </Link>
+            <Link
+              href="/training"
+              className="font-mono text-[10px] tracking-wider transition-all duration-200 hover:underline"
+              style={{ color: '#cc44ff', opacity: 0.6 }}
+            >
+              [ FINE TUNING RUNS ]
+            </Link>
+          </div>
 
           <button
             onClick={() => task && onStart(difficulty, task, mode, attackerType)}

@@ -3,6 +3,7 @@
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import Link from 'next/link';
+import { useState } from 'react';
 import { formatDuration } from '@/lib/format';
 
 type JobStatus = 'preparing' | 'uploading' | 'training' | 'merging' | 'deploying' | 'ready' | 'failed';
@@ -36,6 +37,28 @@ function timeAgo(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      className="font-mono text-[10px] px-1.5 py-0.5 rounded transition-all duration-200 shrink-0"
+      style={{
+        background: copied ? '#cc44ff20' : 'transparent',
+        color: copied ? '#cc44ff' : 'var(--color-text-secondary)',
+        border: `1px solid ${copied ? '#cc44ff' : 'var(--color-border)'}`,
+      }}
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
 }
 
 export default function TrainingPage() {
@@ -139,7 +162,7 @@ export default function TrainingPage() {
                     {/* Meta row */}
                     <div className="flex gap-4 mt-2 font-mono text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       <span>{job.gameCount} game{job.gameCount !== 1 ? 's' : ''}</span>
-                      <span>{job.textOnly ? 'Text-only' : 'Multimodal'}</span>
+                      <span>{job.textOnly ? 'Qwen2.5-3B-Instruct' : 'Qwen2.5-VL-3B-Instruct'}</span>
                       <span>{timeAgo(job.startedAt)}</span>
                       {job.completedAt && (
                         <span>
@@ -189,8 +212,11 @@ export default function TrainingPage() {
                           className="font-mono text-xs p-2 rounded"
                           style={{ background: '#cc44ff10', border: '1px solid #cc44ff30' }}
                         >
-                          <div className="font-bold mb-1" style={{ color: '#cc44ff' }}>Serve URL</div>
-                          <div className="truncate" style={{ color: 'var(--color-text-primary)' }}>{job.serveUrl}</div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold" style={{ color: '#cc44ff' }}>Serve URL</span>
+                            <CopyButton text={job.serveUrl} />
+                          </div>
+                          <div className="break-all" style={{ color: 'var(--color-text-primary)' }}>{job.serveUrl}</div>
                           <div className="mt-1" style={{ color: 'var(--color-text-secondary)' }}>
                             First request cold-starts (~2min)
                           </div>

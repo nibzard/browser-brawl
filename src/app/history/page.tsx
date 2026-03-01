@@ -184,6 +184,17 @@ export default function HistoryPage() {
               </div>
             </div>
             <Link
+              href="/training"
+              className="font-display text-xs font-bold tracking-widest uppercase px-4 py-2 rounded transition-all duration-200 hover:scale-105"
+              style={{
+                background: 'var(--color-bg-card)',
+                color: '#cc44ff',
+                border: '2px solid #cc44ff',
+              }}
+            >
+              Fine Tuning Runs
+            </Link>
+            <Link
               href="/"
               className="font-display text-xs font-bold tracking-widest uppercase px-4 py-2 rounded transition-all duration-200 hover:scale-105"
               style={{
