@@ -1,13 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { getSession } from './game-session-store';
+import { getSession, createGate } from './game-session-store';
 import { emitEvent } from './sse-emitter';
 import { endGame } from './defender-agent';
 import { nanoid } from 'nanoid';
 import { getAnthropicApiKey } from './env';
-import type { AttackerStepPayload } from '@/types/events';
+import { initLaminar } from './laminar';
+import { recordAttackerStep } from './data-collector';
+import type { AttackerStepPayload, TurnChangePayload } from '@/types/events';
 
+// Initialize Laminar before creating Anthropic client so all calls are traced
+initLaminar();
 const anthropic = new Anthropic({ apiKey: getAnthropicApiKey() });
 
 /**
@@ -124,6 +128,15 @@ IMPORTANT:
           isComplete,
         });
 
+        // Persist text-only step to Convex
+        recordAttackerStep({
+          gameId,
+          stepNumber,
+          description: finalText.slice(0, 200),
+          agentStatus: isComplete ? 'complete' : 'acting',
+          timestamp: new Date().toISOString(),
+        });
+
         if (isComplete) {
           s.attackerStatus = 'complete';
           s.attackerSteps.push({
@@ -172,6 +185,7 @@ IMPORTANT:
         });
 
         // Execute via MCP
+        let toolResultSummary = '';
         try {
           const result = await mcpClient.callTool({
             name: toolUse.name,
@@ -183,6 +197,8 @@ IMPORTANT:
             ?.map(c => c.text ?? '')
             .join('\n') ?? 'OK';
 
+          toolResultSummary = resultContent.slice(0, 500);
+
           toolResults.push({
             type: 'tool_result',
             tool_use_id: toolUse.id,
@@ -190,17 +206,88 @@ IMPORTANT:
           });
         } catch (err) {
           console.error(`[attacker] tool ${toolUse.name} error:`, err);
+          toolResultSummary = `Error: ${err instanceof Error ? err.message : String(err)}`;
           toolResults.push({
             type: 'tool_result',
             tool_use_id: toolUse.id,
-            content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            content: toolResultSummary,
             is_error: true,
           });
         }
+
+        // Persist tool step to Convex
+        recordAttackerStep({
+          gameId,
+          stepNumber,
+          toolName: toolUse.name,
+          toolInput: JSON.stringify(toolUse.input).slice(0, 2000),
+          toolResultSummary,
+          description,
+          agentStatus: 'acting',
+          timestamp: new Date().toISOString(),
+        });
       }
 
       // Add tool results to conversation
       messages.push({ role: 'user', content: toolResults });
+
+      // Turn-based: check if attacker's turn is exhausted
+      console.log(`[attacker] mode=${s.mode} stepsThisTurn=${s.attackerStepsThisTurn}/${s.attackerStepsPerTurn}`);
+      if (s.mode === 'turnbased' && toolUses.length > 0) {
+        s.attackerStepsThisTurn++;
+
+        if (s.attackerStepsThisTurn >= s.attackerStepsPerTurn) {
+          // Attacker turn is over — hand off to defender
+          s.currentTurn = 'defender';
+
+          emitEvent<TurnChangePayload>(gameId, 'turn_change', {
+            currentTurn: 'defender',
+            turnNumber: s.turnNumber,
+            attackerStepsRemaining: 0,
+            attackerStepsPerTurn: s.attackerStepsPerTurn,
+          });
+
+          // Create gate and wake defender
+          const gate = createGate();
+          s.attackerGate = gate;
+          s.attackerStatus = 'idle';
+          emitEvent(gameId, 'status_update', {
+            attackerStatus: 'idle',
+            defenderStatus: 'plotting',
+          });
+
+          if (s.defenderSignal) {
+            s.defenderSignal.resolve();
+            s.defenderSignal = null;
+          }
+
+          // Block until defender finishes
+          await gate.promise;
+
+          // Check if game ended during defender turn
+          if (signal.aborted || s.phase !== 'arena') break;
+
+          // Start new attacker turn
+          s.attackerStepsThisTurn = 0;
+          s.turnNumber++;
+          s.currentTurn = 'attacker';
+
+          emitEvent<TurnChangePayload>(gameId, 'turn_change', {
+            currentTurn: 'attacker',
+            turnNumber: s.turnNumber,
+            attackerStepsRemaining: s.attackerStepsPerTurn,
+            attackerStepsPerTurn: s.attackerStepsPerTurn,
+          });
+        } else {
+          // Still attacker's turn — emit progress
+          emitEvent<TurnChangePayload>(gameId, 'turn_change', {
+            currentTurn: 'attacker',
+            turnNumber: s.turnNumber,
+            attackerStepsRemaining: s.attackerStepsPerTurn - s.attackerStepsThisTurn,
+            attackerStepsPerTurn: s.attackerStepsPerTurn,
+          });
+        }
+      }
 
       // Small delay between steps to avoid rate limiting
       await sleep(500);

@@ -1,13 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { getSession, type ServerGameSession } from './game-session-store';
+import { getSession, createGate, type ServerGameSession } from './game-session-store';
 import { getDisruptionsForDifficulty, getDisruptionById } from './disruptions';
 import { injectJS, snapshotDOM } from './browserbase';
 import { emitEvent } from './sse-emitter';
 import { nanoid } from 'nanoid';
 import { getAnthropicApiKey } from './env';
+import { initLaminar } from './laminar';
+import { recordDefenderAction, finalizeGame, recordHealthChange } from './data-collector';
 import type { DisruptionEvent } from '@/types/game';
-import type { DefenderDisruptionPayload, HealthUpdatePayload } from '@/types/events';
+import type { DefenderDisruptionPayload, HealthUpdatePayload, TurnChangePayload } from '@/types/events';
 
+// Initialize Laminar before creating Anthropic client so all calls are traced
+initLaminar();
 const client = new Anthropic({ apiKey: getAnthropicApiKey() });
 
 const DIFFICULTY_INTERVAL: Record<string, number> = {
@@ -28,12 +32,21 @@ export function startDefenderLoop(gameId: string): void {
   const session = getSession(gameId);
   if (!session) return;
 
-  // Start passive health decay (every second)
+  console.log(`[defender] startDefenderLoop mode=${session.mode} difficulty=${session.difficulty}`);
+
+  if (session.mode === 'turnbased') {
+    // Turn-based: no timers, no health decay — defender waits for signal from attacker
+    runTurnBasedDefenderLoop(gameId).catch(err => {
+      console.error('[defender] turn-based loop error:', err);
+    });
+    return;
+  }
+
+  // Realtime: passive health decay + timer-based disruptions
   session.healthDecayHandle = setInterval(() => {
     tickHealthDecay(gameId);
   }, 1000);
 
-  // Start defender attack loop
   scheduleNextAttack(gameId);
 }
 
@@ -46,6 +59,37 @@ function scheduleNextAttack(gameId: string): void {
     await runDefenderTurn(gameId);
     scheduleNextAttack(gameId);
   }, intervalMs);
+}
+
+async function runTurnBasedDefenderLoop(gameId: string): Promise<void> {
+  while (true) {
+    const session = getSession(gameId);
+    if (!session || session.phase !== 'arena') break;
+
+    // Create a signal the attacker will resolve when it's our turn
+    const signal = createGate();
+    session.defenderSignal = signal;
+
+    // Wait for the attacker to hand off
+    await signal.promise;
+
+    // Re-check after waking — game may have ended
+    const s = getSession(gameId);
+    if (!s || s.phase !== 'arena') break;
+
+    // Run one defender turn
+    await runDefenderTurn(gameId);
+
+    // Re-check after disruption — game may have ended from health depletion
+    const s2 = getSession(gameId);
+    if (!s2 || s2.phase !== 'arena') break;
+
+    // Signal the attacker to resume
+    if (s2.attackerGate) {
+      s2.attackerGate.resolve();
+      s2.attackerGate = null;
+    }
+  }
 }
 
 function tickHealthDecay(gameId: string): void {
@@ -239,11 +283,21 @@ async function runDefenderTurn(gameId: string): Promise<void> {
   const availableDisruptions = getDisruptionsForDifficulty(session.difficulty);
 
   // Filter out disruptions on cooldown
-  const now = Date.now();
-  const ready = availableDisruptions.filter(d => {
-    const lastUsed = session.defenderCooldowns.get(d.id) ?? 0;
-    return now - lastUsed >= d.cooldownMs;
-  });
+  let ready;
+  if (session.mode === 'turnbased') {
+    // Turn-based: cooldowns are turn-based (2-turn gap)
+    ready = availableDisruptions.filter(d => {
+      const lastUsedTurn = session.defenderCooldowns.get(d.id) ?? 0;
+      return session.turnNumber - lastUsedTurn >= 2;
+    });
+  } else {
+    // Realtime: cooldowns are time-based
+    const now = Date.now();
+    ready = availableDisruptions.filter(d => {
+      const lastUsed = session.defenderCooldowns.get(d.id) ?? 0;
+      return now - lastUsed >= d.cooldownMs;
+    });
+  }
 
   if (ready.length === 0) return;
 
@@ -277,7 +331,7 @@ async function runDefenderTurn(gameId: string): Promise<void> {
   const success = await injectJS(session.cdpUrl, payload);
   console.log(`[defender] ${disruption.name} → ${success ? 'HIT' : 'MISS'} (${disruption.healthDamage} HP)`);
 
-  session.defenderCooldowns.set(disruption.id, Date.now());
+  session.defenderCooldowns.set(disruption.id, session.mode === 'turnbased' ? session.turnNumber : Date.now());
 
   const event: DisruptionEvent = {
     id: nanoid(8),
@@ -290,6 +344,21 @@ async function runDefenderTurn(gameId: string): Promise<void> {
     reasoning: chosen.reasoning,
   };
   session.defenderDisruptions.push(event);
+
+  // Persist defender action to Convex
+  recordDefenderAction({
+    gameId,
+    actionNumber: session.defenderDisruptions.length,
+    disruptionId: disruption.id,
+    disruptionName: disruption.name,
+    description: disruption.description,
+    healthDamage: disruption.healthDamage,
+    success,
+    reasoning: chosen.reasoning,
+    timestamp: event.timestamp,
+    injectionPayload: payload.slice(0, 5000),
+    attackerStepAtTime: session.attackerSteps.length,
+  });
 
   // Damage health
   if (success) {
@@ -311,6 +380,14 @@ async function runDefenderTurn(gameId: string): Promise<void> {
       previousHealth: prev,
       delta: -disruption.healthDamage,
       isCritical: next < 20,
+    });
+
+    // Record disruption damage to health timeline
+    recordHealthChange({
+      gameId,
+      health: next,
+      delta: -disruption.healthDamage,
+      cause: `disruption:${disruption.id}`,
     });
 
     if (next <= 0) {
@@ -344,6 +421,16 @@ export function endGame(
   if (session.healthDecayHandle) clearInterval(session.healthDecayHandle);
   if (session.attackerAbort) session.attackerAbort.abort();
 
+  // Resolve turn-based gates so coroutines unblock and exit
+  if (session.attackerGate) {
+    session.attackerGate.resolve();
+    session.attackerGate = null;
+  }
+  if (session.defenderSignal) {
+    session.defenderSignal.resolve();
+    session.defenderSignal = null;
+  }
+
   const elapsed = Math.floor(
     (Date.now() - new Date(session.startedAt).getTime()) / 1000
   );
@@ -353,5 +440,14 @@ export function endGame(
     reason,
     finalHealth: session.health,
     elapsedSeconds: elapsed,
+  });
+
+  // Persist final game state to Convex
+  finalizeGame({
+    gameId,
+    winner,
+    winReason: reason,
+    healthFinal: session.health,
+    durationSeconds: elapsed,
   });
 }

@@ -6,10 +6,12 @@ import { startDefenderLoop, endGame } from '@/lib/defender-agent';
 import { emitEvent } from '@/lib/sse-emitter';
 import { TASKS } from '@/lib/tasks';
 import { runAttackerLoop } from '@/lib/attacker-agent';
+import { createGameRecord } from '@/lib/data-collector';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { taskId, difficulty = 'easy', customTask } = body;
+  const { taskId, difficulty = 'easy', customTask, mode = 'realtime' } = body;
+  const gameMode = mode === 'turnbased' ? 'turnbased' : 'realtime' as const;
 
   const task =
     customTask
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
     console.log('[start] browser created:', browserSessionId);
     console.log('[start] CDP URL:', cdpUrl);
     console.log('[start] live view:', liveViewUrl);
+    console.log('[start] mode:', gameMode, '| difficulty:', difficulty);
   } catch (err) {
     console.error('[start] browser-use createBrowser error:', err);
     return NextResponse.json({ error: 'Failed to create browser session' }, { status: 500 });
@@ -49,6 +52,20 @@ export async function POST(req: NextRequest) {
     liveViewUrl,
     task,
     difficulty,
+    mode: gameMode,
+  });
+
+  // 2b. Persist to Convex for training data collection
+  createGameRecord({
+    gameId,
+    taskId: task.id,
+    taskLabel: task.label,
+    taskDescription: task.description,
+    taskStartUrl: task.startUrl,
+    difficulty,
+    mode: gameMode,
+    attackerModel: 'claude-sonnet-4-20250514',
+    defenderModel: 'claude-haiku-4-5-20251001',
   });
 
   // 3. Transition to arena
@@ -60,7 +77,17 @@ export async function POST(req: NextRequest) {
     defenderStatus: 'idle',
   });
 
-  // 4. Start attacker agent loop (Playwright MCP + Anthropic) — non-blocking
+  // 4. Emit initial turn state for turn-based games
+  if (gameMode === 'turnbased') {
+    emitEvent(gameId, 'turn_change', {
+      currentTurn: 'attacker',
+      turnNumber: 1,
+      attackerStepsRemaining: session.attackerStepsPerTurn,
+      attackerStepsPerTurn: session.attackerStepsPerTurn,
+    });
+  }
+
+  // 5. Start attacker agent loop (Playwright MCP + Anthropic) — non-blocking
   const abort = new AbortController();
   session.attackerAbort = abort;
 
@@ -76,10 +103,10 @@ export async function POST(req: NextRequest) {
     }
   });
 
-  // 5. Start defender loop (after a delay to let the browser load)
+  // 6. Start defender loop (after a delay to let the browser load)
   setTimeout(() => {
     startDefenderLoop(gameId);
   }, 8000);
 
-  return NextResponse.json({ sessionId: gameId, liveViewUrl });
+  return NextResponse.json({ sessionId: gameId, liveViewUrl, mode: gameMode });
 }
