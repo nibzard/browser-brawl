@@ -1,7 +1,9 @@
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'nightmare';
+export type GameMode = 'realtime' | 'turnbased';
 export type GamePhase = 'lobby' | 'loading' | 'arena' | 'game_over';
 export type AttackerStatus = 'idle' | 'thinking' | 'acting' | 'complete' | 'failed';
 export type DefenderStatus = 'idle' | 'plotting' | 'striking' | 'cooling_down';
+export type TurnOwner = 'attacker' | 'defender';
 
 export interface Task {
   id: string;
@@ -55,6 +57,7 @@ export interface ClientGameState {
   liveViewUrl: string | null;
   task: Task | null;
   difficulty: Difficulty;
+  mode: GameMode;
   health: number;
   elapsedSeconds: number;
   attackerStatus: AttackerStatus;
@@ -64,4 +67,8 @@ export interface ClientGameState {
   winner: 'attacker' | 'defender' | null;
   winReason: string | null;
   lastHit: boolean;
+  currentTurn: TurnOwner | null;
+  turnNumber: number;
+  attackerStepsThisTurn: number;
+  attackerStepsPerTurn: number;
 }

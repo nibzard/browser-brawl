@@ -1,7 +1,8 @@
 'use client';
 
 import { HealthBar } from './HealthBar';
-import type { Task, AttackerStatus, DefenderStatus } from '@/types/game';
+import { TurnIndicator } from './TurnIndicator';
+import type { Task, AttackerStatus, DefenderStatus, GameMode, TurnOwner } from '@/types/game';
 
 interface Props {
   health: number;
@@ -10,9 +11,14 @@ interface Props {
   attackerStatus: AttackerStatus;
   defenderStatus: DefenderStatus;
   onAbort: () => void;
+  mode: GameMode;
+  currentTurn: TurnOwner | null;
+  turnNumber: number;
+  attackerStepsThisTurn: number;
+  attackerStepsPerTurn: number;
 }
 
-export function ArenaHeader({ health, elapsed, task, attackerStatus, defenderStatus, onAbort }: Props) {
+export function ArenaHeader({ health, elapsed, task, attackerStatus, defenderStatus, onAbort, mode, currentTurn, turnNumber, attackerStepsThisTurn, attackerStepsPerTurn }: Props) {
   return (
     <div className="flex flex-col gap-1 shrink-0 px-4 py-2"
       style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-panel)' }}>
@@ -53,6 +59,16 @@ export function ArenaHeader({ health, elapsed, task, attackerStatus, defenderSta
 
       {/* Health bar row */}
       <HealthBar health={health} />
+
+      {/* Turn indicator (turn-based mode only) */}
+      {mode === 'turnbased' && currentTurn && (
+        <TurnIndicator
+          currentTurn={currentTurn}
+          turnNumber={turnNumber}
+          stepsRemaining={attackerStepsPerTurn - attackerStepsThisTurn}
+          stepsPerTurn={attackerStepsPerTurn}
+        />
+      )}
     </div>
   );
 }

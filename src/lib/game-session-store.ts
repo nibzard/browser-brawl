@@ -46,8 +46,8 @@ export const sessions: Map<string, ServerGameSession> =
   global.__gameSessions ?? (global.__gameSessions = new Map());
 
 const STEPS_PER_TURN: Record<string, number> = {
-  easy: 4,
-  medium: 3,
+  easy: 2,
+  medium: 2,
   hard: 2,
   nightmare: 2,
 };

@@ -122,10 +122,16 @@ export async function POST(req: NextRequest) {
     }
   });
 
-  // 6. Start defender loop (after a delay to let the browser load)
-  setTimeout(() => {
+  // 6. Start defender loop
+  // Turn-based: start immediately — defender just waits for attacker's signal, no browser needed yet
+  // Realtime: delay 8s to let the browser load before injecting disruptions
+  if (gameMode === 'turnbased') {
     startDefenderLoop(gameId);
-  }, 8000);
+  } else {
+    setTimeout(() => {
+      startDefenderLoop(gameId);
+    }, 8000);
+  }
 
   return NextResponse.json({ sessionId: gameId, liveViewUrl, mode: gameMode });
 }

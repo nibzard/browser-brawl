@@ -1,4 +1,4 @@
-import type { AttackerStatus, DefenderStatus } from './game';
+import type { AttackerStatus, DefenderStatus, TurnOwner } from './game';
 
 export type SSEEventType =
   | 'connection_established'
@@ -7,6 +7,7 @@ export type SSEEventType =
   | 'health_update'
   | 'status_update'
   | 'timer_tick'
+  | 'turn_change'
   | 'game_over';
 
 export interface SSEEnvelope<T = unknown> {
@@ -46,6 +47,13 @@ export interface TimerTickPayload {
 export interface StatusUpdatePayload {
   attackerStatus: AttackerStatus;
   defenderStatus: DefenderStatus;
+}
+
+export interface TurnChangePayload {
+  currentTurn: TurnOwner;
+  turnNumber: number;
+  attackerStepsRemaining: number;
+  attackerStepsPerTurn: number;
 }
 
 export interface GameOverPayload {

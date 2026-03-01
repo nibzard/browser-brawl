@@ -1,13 +1,14 @@
 'use client';
 
 import { useReducer, useCallback } from 'react';
-import type { ClientGameState, Difficulty, Task, AgentEvent, DisruptionEvent } from '@/types/game';
+import type { ClientGameState, Difficulty, GameMode, Task, AgentEvent, DisruptionEvent } from '@/types/game';
 import type {
   SSEEnvelope,
   AttackerStepPayload,
   DefenderDisruptionPayload,
   HealthUpdatePayload,
   StatusUpdatePayload,
+  TurnChangePayload,
   GameOverPayload,
 } from '@/types/events';
 
@@ -17,6 +18,7 @@ const initial: ClientGameState = {
   liveViewUrl: null,
   task: null,
   difficulty: 'easy',
+  mode: 'realtime',
   health: 100,
   elapsedSeconds: 0,
   attackerStatus: 'idle',
@@ -26,10 +28,14 @@ const initial: ClientGameState = {
   winner: null,
   winReason: null,
   lastHit: false,
+  currentTurn: null,
+  turnNumber: 0,
+  attackerStepsThisTurn: 0,
+  attackerStepsPerTurn: 3,
 };
 
 type Action =
-  | { type: 'START_LOADING'; difficulty: Difficulty; task: Task }
+  | { type: 'START_LOADING'; difficulty: Difficulty; task: Task; mode: GameMode }
   | { type: 'ARENA_READY'; sessionId: string; liveViewUrl: string }
   | { type: 'SSE_EVENT'; envelope: SSEEnvelope }
   | { type: 'RESET' };
@@ -42,6 +48,7 @@ function reducer(state: ClientGameState, action: Action): ClientGameState {
         phase: 'loading',
         difficulty: action.difficulty,
         task: action.task,
+        mode: action.mode,
       };
 
     case 'ARENA_READY':
@@ -115,6 +122,17 @@ function reducer(state: ClientGameState, action: Action): ClientGameState {
           return { ...state, elapsedSeconds: (envelope.payload as { elapsedSeconds: number }).elapsedSeconds };
         }
 
+        case 'turn_change': {
+          const p = envelope.payload as TurnChangePayload;
+          return {
+            ...state,
+            currentTurn: p.currentTurn,
+            turnNumber: p.turnNumber,
+            attackerStepsThisTurn: p.attackerStepsPerTurn - p.attackerStepsRemaining,
+            attackerStepsPerTurn: p.attackerStepsPerTurn,
+          };
+        }
+
         case 'game_over': {
           const p = envelope.payload as GameOverPayload;
           return {
@@ -143,8 +161,8 @@ function reducer(state: ClientGameState, action: Action): ClientGameState {
 export function useGameState() {
   const [state, dispatch] = useReducer(reducer, initial);
 
-  const startGame = useCallback((difficulty: Difficulty, task: Task) => {
-    dispatch({ type: 'START_LOADING', difficulty, task });
+  const startGame = useCallback((difficulty: Difficulty, task: Task, mode: GameMode = 'realtime') => {
+    dispatch({ type: 'START_LOADING', difficulty, task, mode });
   }, []);
 
   const setArenaReady = useCallback((sessionId: string, liveViewUrl: string) => {
