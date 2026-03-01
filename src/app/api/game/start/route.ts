@@ -39,6 +39,25 @@ export async function POST(req: NextRequest) {
   let cdpUrl = '';
   let liveViewUrl = '';
 
+  // Pre-warm finetuned model endpoint during browser creation (fire-and-forget).
+  // Modal vLLM cold starts take ~2min — this overlaps warm-up with the ~8s browser spin-up.
+  if (attackerType === 'finetuned' && modelUrl) {
+    console.log('[start] warming up finetuned model endpoint:', modelUrl);
+    fetch(modelUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 1,
+        temperature: 0.0,
+      }),
+    }).then(() => {
+      console.log('[start] model warm-up ping completed');
+    }).catch(() => {
+      console.log('[start] model warm-up ping failed (will retry on first real call)');
+    });
+  }
+
   try {
     if (attackerType === 'browser-use') {
       // Agent session: has both cdpUrl (for defender) and AI task execution

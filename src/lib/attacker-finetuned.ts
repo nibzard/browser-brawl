@@ -205,10 +205,30 @@ export async function runAttackerLoop(gameId: string, signal: AbortSignal): Prom
         snapshotDOM(session.cdpUrl).catch(() => null),
       ]);
 
-      // Call the fine-tuned model
+      // Call the fine-tuned model (with cold start detection)
       console.log(`[finetuned] Step ${stepNumber + 1} — calling model...`);
+      let coldStartEmitted = false;
+      const coldStartTimer = setTimeout(() => {
+        coldStartEmitted = true;
+        console.log('[finetuned] Model call taking >10s — likely cold start');
+        emitEvent<AttackerStepPayload>(gameId, 'attacker_step', {
+          step: stepNumber + 1,
+          description: 'Warming up model endpoint (cold start)...',
+          agentStatus: 'thinking',
+          isComplete: false,
+        });
+      }, 10_000);
+
+      const callStart = Date.now();
       const responseText = await callFinetunedModel(messages, signal, modelUrl);
-      console.log(`[finetuned] Response: ${responseText.slice(0, 200)}`);
+      clearTimeout(coldStartTimer);
+
+      const callDuration = ((Date.now() - callStart) / 1000).toFixed(1);
+      console.log(`[finetuned] Response (${callDuration}s): ${responseText.slice(0, 200)}`);
+
+      if (coldStartEmitted) {
+        console.log(`[finetuned] Cold start resolved after ${callDuration}s`);
+      }
 
       // Add assistant response to conversation
       messages.push({ role: 'assistant', content: responseText });
