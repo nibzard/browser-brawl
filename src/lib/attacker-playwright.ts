@@ -26,8 +26,9 @@ export async function runAttackerLoop(gameId: string, signal: AbortSignal): Prom
   if (!session) return;
 
   // 1. Spawn Playwright MCP as a child process connected to the remote browser
+  const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const transport = new StdioClientTransport({
-    command: 'npx',
+    command: npxCommand,
     args: [
       '@playwright/mcp@latest',
       '--cdp-endpoint', session.cdpUrl,
