@@ -5,7 +5,20 @@ Cat vs Mouse browser agent game — one AI agent (mouse) tries to complete a tas
 ## Tech Stack
 
 - **Frontend/Viz:** Next.js + TypeScript
+- **Browser Infrastructure:** Browserbase (cloud browser via CDP)
 - **Backend/Agents:** TBD (Python or TypeScript)
+
+## Browserbase Integration
+
+- **SDK:** `@browserbasehq/sdk` (Node.js, v2.7+)
+- **Purpose:** Provides a cloud browser session that both agents connect to via CDP
+- **Environment Variables** (in `.env.local`, gitignored):
+  - `BROWSERBASE_API_KEY` — API key (server-side only, never exposed to client)
+  - `BROWSERBASE_PROJECT_ID` — project identifier for session creation
+- **API Route:** `POST /api/browserbase/session` — creates a session and returns `{ sessionId, debuggerFullscreenUrl, connectUrl }`
+- **Live View:** Embedded via iframe using `debuggerFullscreenUrl` from the session debug endpoint
+- **Agent Connection:** Agents connect via `chromium.connectOverCDP(connectUrl)` (Playwright)
+- **Docs:** https://docs.browserbase.com/features/session-live-view
 
 ## Architecture
 
@@ -47,6 +60,26 @@ Cat vs Mouse browser agent game — one AI agent (mouse) tries to complete a tas
 - Create a fake local version from the snapshot
 - Predefine the goal/objective for that page
 - Don't worry about generating multiple websites for now — start with one
+
+## Defender Agent (Cat)
+
+Standalone CLI prototype in `defender/src/`.
+
+- **Entry:** `npm run defend -- "<url>" "<goal>"`
+- **Script:** `node --import tsx/esm defender/src/index.ts`
+- **Model:** `claude-sonnet-4-6` via `@anthropic-ai/sdk`
+- **Browser control:** `@playwright/mcp` spawned as child process via `StdioClientTransport` (not a local dep — invoked via `npx @playwright/mcp@latest`)
+- **MCP client:** `@modelcontextprotocol/sdk` — `Client` connects to Playwright MCP, fetches tools, converts `inputSchema` → `input_schema` for Anthropic API
+- **Agentic loop:** Claude calls browser tools (`browser_navigate`, `browser_snapshot`, `browser_evaluate`) → results fed back → repeat until `end_turn` or 50 iterations
+- **Main weapon:** `browser_evaluate` runs arbitrary JS in page context (like `page.evaluate()`) — injects overlays, fake buttons, CSS traps, event listeners
+- **Env:** `ANTHROPIC_API_KEY` loaded from `.env.local` (code parses it directly, overrides shell env)
+- **TypeScript:** Uses `tsconfig.defender.json` (`module: NodeNext`) separate from root Next.js tsconfig. Relative imports require `.js` extension.
+- **Windows:** `npx.cmd` used instead of `npx` on `win32`
+
+### Files
+- `defender/src/index.ts` — CLI entrypoint, .env.local loader, arg validation
+- `defender/src/defender-agent.ts` — MCP client setup, schema conversion, system prompt, agent loop
+- `tsconfig.defender.json` — NodeNext config for Node.js CLI
 
 ## Open Design Questions
 
