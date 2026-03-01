@@ -129,19 +129,24 @@ def train(
 
         # ── Phase 3: Done ─────────────────────────────────────────────────
         model_path = f"/checkpoints/experiments/{experiment_name}/merged_model"
+        # URL pattern: https://<workspace>--<name>-model-chat.modal.run?experiment_name=<name>
+        serve_url = f"https://mehulkalia--{experiment_name}-model-chat.modal.run?experiment_name={experiment_name}"
 
         update_convex_status(
             convex_site_url, experiment_name,
             status="ready",
+            serveUrl=serve_url,
         )
         print(f"[pipeline] Training complete: {experiment_name}", flush=True)
         print(f"[pipeline] Merged model at: {model_path} (on browser-brawl-checkpoints volume)", flush=True)
         print(f"[pipeline] To serve, run:", flush=True)
         print(f"[pipeline]   modal deploy scripts/modal_serve.py --name {experiment_name}", flush=True)
+        print(f"[pipeline] Serve URL: {serve_url}", flush=True)
         return {
             "status": "complete",
             "experiment_name": experiment_name,
             "model_path": model_path,
+            "serve_url": serve_url,
         }
 
     except Exception as e:

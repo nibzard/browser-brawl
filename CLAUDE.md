@@ -331,6 +331,7 @@ Select games on the history page and click "Kickoff Finetune" to trigger the ful
 4. **`/training` page** (`src/app/training/page.tsx`) — Real-time dashboard
    - Uses `useQuery(api.training.list)` for live updates (no polling needed)
    - Shows: experiment name, status badge, progress bar, step/loss metrics, errors
+   - When `ready`: shows serve URL, deploy command, and model volume path
 
 **Env vars required:**
 - `MODAL_TRAIN_ENDPOINT` — deployed Modal kickoff URL (`https://mehulkalia--browser-brawl-train-pipeline-kickoff.modal.run`)
@@ -354,8 +355,13 @@ modal deploy scripts/modal_train_pipeline.py
 
 ### Training Pipeline Output
 
-All output is on the Modal `browser-brawl-checkpoints` volume:
+When training completes (`status: ready`), the pipeline produces:
 
+1. **Merged model** on Modal volume, ready for vLLM serving
+2. **Serve URL** stored in Convex `trainingJobs.serveUrl` and displayed on `/training` page
+3. **Deploy command** shown on `/training` page
+
+**Model files** on Modal `browser-brawl-checkpoints` volume:
 ```
 /checkpoints/experiments/{experiment_name}/
 ├── checkpoint-*/          ← SFTTrainer epoch checkpoints
@@ -363,15 +369,20 @@ All output is on the Modal `browser-brawl-checkpoints` volume:
 └── merged_model/          ← Full merged model for vLLM serving (~6GB, bfloat16 safetensors)
 ```
 
+**Serve URL pattern** (workspace: `mehulkalia`):
+```
+https://mehulkalia--{experiment_name}-model-chat.modal.run?experiment_name={experiment_name}
+```
+
 **Modal volumes:**
 - `browser-brawl-model-cache` — HuggingFace model cache (mounted at `/model_cache`)
 - `browser-brawl-training-data` — Training data input (mounted at `/data`)
 - `browser-brawl-checkpoints` — Outputs: LoRA adapters + merged models (mounted at `/checkpoints`)
 
-**To serve a trained model:**
+**To serve a trained model** (still a manual step after pipeline completes):
 ```bash
 modal deploy scripts/modal_serve.py --name <experiment-name>
-# FINETUNED_MODEL_URL=https://mehulkalia--<name>-model-chat.modal.run?experiment_name=<name>
+# Sets FINETUNED_MODEL_URL in .env.local to the serve URL shown on /training page
 ```
 
 **To download locally:**
