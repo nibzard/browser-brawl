@@ -4,11 +4,11 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { getSession, createGate } from './game-session-store';
 import { emitEvent } from './sse-emitter';
 import { endGame } from './defender-agent';
-import { nanoid } from 'nanoid';
 import { getAnthropicApiKey } from './env';
-import { recordAttackerStep, recordConversation, captureAndUploadScreenshot } from './data-collector';
+import { recordConversation, captureAndUploadScreenshot } from './data-collector';
 import { snapshotDOM } from './browserbase';
-import type { AttackerStepPayload, TurnChangePayload } from '@/types/events';
+import { AttackerStepLogger } from './attacker-step-logger';
+import type { TurnChangePayload } from '@/types/events';
 
 const anthropic = new Anthropic({ apiKey: getAnthropicApiKey() });
 
@@ -80,7 +80,7 @@ IMPORTANT:
       },
     ];
 
-    let stepNumber = 0;
+    const logger = new AttackerStepLogger(gameId);
     let toolStepCount = 0;
     const MAX_STEPS = 50;
 
@@ -102,7 +102,7 @@ IMPORTANT:
       ]);
 
       // Call Claude (pass abort signal so the request is cancelled on game end)
-      console.log(`[attacker] Step ${stepNumber + 1} — calling Claude...`);
+      console.log(`[attacker] Step ${logger.currentStep + 1} — calling Claude...`);
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
@@ -115,12 +115,12 @@ IMPORTANT:
       messages.push({ role: 'assistant', content: assistantContent });
 
       const blockTypes = assistantContent.map(b => b.type).join(', ');
-      console.log(`[training-data] 🤖 Claude response | step=${stepNumber + 1} blocks=[${blockTypes}] stop=${response.stop_reason}`);
+      console.log(`[training-data] 🤖 Claude response | step=${logger.currentStep + 1} blocks=[${blockTypes}] stop=${response.stop_reason}`);
 
       // Persist full conversation for training data extraction
       recordConversation({
         gameId,
-        stepNumber: stepNumber + 1,
+        stepNumber: logger.currentStep + 1,
         messages: JSON.stringify(messages),
         toolDefinitions: toolDefsJson,
       });
@@ -136,73 +136,38 @@ IMPORTANT:
       );
       const reasoningText = textBlocks.map(b => b.text).join('\n').trim();
       if (reasoningText && toolUses.length > 0) {
-        stepNumber++;
-        const thinkDesc = reasoningText.slice(0, 300);
-        s.attackerSteps.push({
-          id: nanoid(8),
-          step: stepNumber,
-          description: thinkDesc,
-          timestamp: new Date().toISOString(),
-          agentStatus: 'thinking',
-        });
-        emitEvent<AttackerStepPayload>(gameId, 'attacker_step', {
-          step: stepNumber,
-          description: thinkDesc,
-          agentStatus: 'thinking',
-          isComplete: false,
+        logger.logThinking({
+          description: reasoningText.slice(0, 300),
+          screenshotId: preScreenshotId,
+          domSnapshot: domSnap,
         });
       }
 
       if (toolUses.length === 0) {
         // No tool calls — Claude is done or responding with text
-        const textBlocks = assistantContent.filter(
-          (block): block is Anthropic.TextBlock => block.type === 'text'
-        );
         const finalText = textBlocks.map(b => b.text).join('\n');
-
-        stepNumber++;
         const isComplete = finalText.toLowerCase().includes('task complete');
         console.log(`[attacker] Text response (complete=${isComplete}): ${finalText.slice(0, 150)}`);
 
-        emitEvent<AttackerStepPayload>(gameId, 'attacker_step', {
-          step: stepNumber,
-          description: finalText.slice(0, 200),
-          agentStatus: isComplete ? 'complete' : 'acting',
-          isComplete,
-        });
-
-        // Persist text-only step to Convex
-        recordAttackerStep({
-          gameId,
-          stepNumber,
-          description: finalText.slice(0, 200),
-          agentStatus: isComplete ? 'complete' : 'acting',
-          timestamp: new Date().toISOString(),
-          domSnapshot: domSnap ?? undefined,
-          screenshotBeforeId: preScreenshotId ?? undefined,
-        });
-
         if (isComplete) {
-          s.attackerStatus = 'complete';
-          s.attackerSteps.push({
-            id: nanoid(8),
-            step: stepNumber,
+          logger.logComplete({
             description: finalText.slice(0, 200),
-            timestamp: new Date().toISOString(),
-            agentStatus: 'complete',
+            success: true,
+            screenshotId: preScreenshotId,
+            domSnapshot: domSnap,
           });
           endGame(gameId, 'attacker', 'task_complete');
+        } else {
+          logger.logAction({
+            description: finalText.slice(0, 200),
+            screenshotId: preScreenshotId,
+            domSnapshot: domSnap,
+          });
         }
         break;
       }
 
       // Execute each tool call via MCP
-      s.attackerStatus = 'acting';
-      emitEvent(gameId, 'status_update', {
-        attackerStatus: 'acting',
-        defenderStatus: s.defenderStatus,
-      });
-
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
       for (const toolUse of toolUses) {
@@ -211,25 +176,9 @@ IMPORTANT:
         if (toolStepCount >= MAX_STEPS) break;
 
         toolStepCount++;
-        stepNumber++;
 
-        // Emit step event
         const description = `${toolUse.name}(${summarizeInput(toolUse.input)})`;
         console.log(`[attacker] Tool: ${description}`);
-        s.attackerSteps.push({
-          id: nanoid(8),
-          step: stepNumber,
-          description,
-          timestamp: new Date().toISOString(),
-          agentStatus: 'acting',
-        });
-
-        emitEvent<AttackerStepPayload>(gameId, 'attacker_step', {
-          step: stepNumber,
-          description,
-          agentStatus: 'acting',
-          isComplete: false,
-        });
 
         // Execute via MCP
         let toolResultSummary = '';
@@ -263,29 +212,25 @@ IMPORTANT:
           });
         }
 
-        // Persist tool step to Convex
-        recordAttackerStep({
-          gameId,
-          stepNumber,
+        // Log tool step via unified logger (SSE + in-memory + Convex)
+        logger.logAction({
+          description,
           toolName: toolUse.name,
           toolInput: JSON.stringify(toolUse.input).slice(0, 2000),
-          toolResultSummary,
-          description,
-          agentStatus: 'acting',
-          timestamp: new Date().toISOString(),
-          domSnapshot: domSnap ?? undefined,
-          screenshotBeforeId: preScreenshotId ?? undefined,
+          toolResult: toolResultSummary,
+          screenshotId: preScreenshotId,
+          domSnapshot: domSnap,
         });
       }
 
       // Add tool results to conversation
       messages.push({ role: 'user', content: toolResults });
 
-      console.log(`[training-data] 💾 Saving full turn | step=${stepNumber} toolResults=${toolResults.length}`);
+      console.log(`[training-data] 💾 Saving full turn | step=${logger.currentStep} toolResults=${toolResults.length}`);
       // Persist conversation with tool results included
       recordConversation({
         gameId,
-        stepNumber,
+        stepNumber: logger.currentStep,
         messages: JSON.stringify(messages),
         toolDefinitions: toolDefsJson,
       });
