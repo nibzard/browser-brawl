@@ -9,6 +9,7 @@ import { getAnthropicApiKey } from './env';
 import { recordConversation, captureAndUploadScreenshot } from './data-collector';
 import { snapshotDOM } from './cdp';
 import { AttackerStepLogger } from './attacker-step-logger';
+import { buildPlaywrightMcpLaunchArgs } from './playwright-mcp-launcher';
 import { log, logError } from './log';
 import type { TurnChangePayload } from '@/types/events';
 
@@ -26,13 +27,11 @@ export async function runAttackerLoop(gameId: string, signal: AbortSignal): Prom
   if (!session) return;
 
   // 1. Spawn Playwright MCP as a child process connected to the remote browser
-  const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  const mcpLaunch = buildPlaywrightMcpLaunchArgs(session.cdpUrl);
   const transport = new StdioClientTransport({
-    command: npxCommand,
-    args: [
-      '@playwright/mcp@latest',
-      '--cdp-endpoint', session.cdpUrl,
-    ],
+    command: mcpLaunch.command,
+    args: mcpLaunch.args,
+    env: mcpLaunch.env,
   });
 
   const mcpClient = new Client({ name: 'browser-brawl-attacker', version: '1.0.0' });
@@ -116,7 +115,7 @@ IMPORTANT:
       // Call Claude immediately
       log(`[attacker] Step ${logger.currentStep + 1} — calling Claude (loop start +${Date.now() - loopT0}ms)...`);
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         tools,
         messages,
