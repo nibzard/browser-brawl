@@ -70,6 +70,22 @@ export async function GET(
         })}\n\n`;
         controller.enqueue(encoder.encode(ev));
       }
+
+      // Replay turn state for turn-based games
+      if (session.mode === 'turnbased' && session.currentTurn) {
+        const turnEv = `data: ${JSON.stringify({
+          type: 'turn_change',
+          sessionId,
+          timestamp: new Date().toISOString(),
+          payload: {
+            currentTurn: session.currentTurn,
+            turnNumber: session.turnNumber,
+            attackerStepsRemaining: session.attackerStepsPerTurn - session.attackerStepsThisTurn,
+            attackerStepsPerTurn: session.attackerStepsPerTurn,
+          },
+        })}\n\n`;
+        controller.enqueue(encoder.encode(turnEv));
+      }
     },
     cancel() {
       session.sseClients.delete(ctrl);

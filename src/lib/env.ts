@@ -28,3 +28,7 @@ function loadFromEnvLocal(key: string): string | undefined {
 export function getAnthropicApiKey(): string | undefined {
   return loadFromEnvLocal('ANTHROPIC_API_KEY') ?? process.env.ANTHROPIC_API_KEY;
 }
+
+export function getLaminarApiKey(): string | undefined {
+  return loadFromEnvLocal('LMNR_PROJECT_API_KEY') ?? process.env.LMNR_PROJECT_API_KEY;
+}

@@ -3,7 +3,13 @@ import { getSession } from './game-session-store';
 import { emitEvent } from './sse-emitter';
 import { endGame } from './defender-agent';
 import { nanoid } from 'nanoid';
+import { initLaminar } from './laminar';
+import { recordAttackerStep, captureAndUploadScreenshot } from './data-collector';
+import { snapshotDOM } from './browserbase';
 import type { AttackerStepPayload } from '@/types/events';
+
+// Initialize Laminar so Stagehand's underlying Anthropic calls are traced
+initLaminar();
 
 const MAX_STEPS = 50;
 
@@ -96,6 +102,17 @@ If elements disappear or move, try to find them again.
 Be persistent and methodical.`,
     });
 
+    // Capture initial screenshot + DOM snapshot (fire-and-forget)
+    let latestScreenshotId: string | null = null;
+    let latestDomSnap: string | null = null;
+    Promise.all([
+      captureAndUploadScreenshot(session.cdpUrl).catch(() => null),
+      snapshotDOM(session.cdpUrl).catch(() => null),
+    ]).then(([ssId, dom]) => {
+      latestScreenshotId = ssId;
+      latestDomSnap = dom;
+    });
+
     let stepNumber = 0;
 
     const emitStep = (description: string, status: 'thinking' | 'acting') => {
@@ -123,6 +140,26 @@ Be persistent and methodical.`,
       emitEvent(gameId, 'status_update', {
         attackerStatus: status,
         defenderStatus: sess.defenderStatus,
+      });
+
+      // Persist step to Convex
+      recordAttackerStep({
+        gameId,
+        stepNumber,
+        description,
+        agentStatus: status,
+        timestamp: new Date().toISOString(),
+        domSnapshot: latestDomSnap ?? undefined,
+        screenshotBeforeId: latestScreenshotId ?? undefined,
+      });
+
+      // Refresh screenshot + DOM for next step (fire-and-forget)
+      Promise.all([
+        captureAndUploadScreenshot(session.cdpUrl).catch(() => null),
+        snapshotDOM(session.cdpUrl).catch(() => null),
+      ]).then(([ssId, dom]) => {
+        latestScreenshotId = ssId;
+        latestDomSnap = dom;
       });
     };
 

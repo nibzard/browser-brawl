@@ -1,8 +1,11 @@
 'use client';
 
+import Link from 'next/link';
+
 interface Props {
   winner: 'attacker' | 'defender';
   reason: string | null;
+  sessionId?: string | null;
   onPlayAgain: () => void;
 }
 
@@ -12,7 +15,7 @@ const REASON_LABELS: Record<string, string> = {
   aborted:          'Battle aborted',
 };
 
-export function WinnerBanner({ winner, reason, onPlayAgain }: Props) {
+export function WinnerBanner({ winner, reason, sessionId, onPlayAgain }: Props) {
   const isAttacker = winner === 'attacker';
   const color = isAttacker ? 'var(--color-attacker)' : 'var(--color-defender)';
   const label = isAttacker ? 'ATTACKER WINS' : 'DEFENDER WINS';
@@ -50,19 +53,34 @@ export function WinnerBanner({ winner, reason, onPlayAgain }: Props) {
         style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }}
       />
 
-      {/* Play again */}
-      <button
-        onClick={onPlayAgain}
-        className="px-12 py-4 rounded font-display text-xl font-bold tracking-widest transition-all duration-200 hover:scale-105"
-        style={{
-          background: `${color}18`,
-          border: `2px solid ${color}`,
-          color,
-          boxShadow: `0 0 20px ${color}44`,
-        }}
-      >
-        PLAY AGAIN
-      </button>
+      {/* Actions */}
+      <div className="flex gap-4">
+        <button
+          onClick={onPlayAgain}
+          className="px-12 py-4 rounded font-display text-xl font-bold tracking-widest transition-all duration-200 hover:scale-105"
+          style={{
+            background: `${color}18`,
+            border: `2px solid ${color}`,
+            color,
+            boxShadow: `0 0 20px ${color}44`,
+          }}
+        >
+          PLAY AGAIN
+        </button>
+        {sessionId && (
+          <Link
+            href={`/history/${sessionId}`}
+            className="px-8 py-4 rounded font-display text-xl font-bold tracking-widest transition-all duration-200 hover:scale-105 flex items-center"
+            style={{
+              background: 'var(--color-bg-card)',
+              border: '2px solid var(--color-border)',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            VIEW REPLAY
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

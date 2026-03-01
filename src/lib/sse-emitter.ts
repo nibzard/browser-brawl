@@ -1,5 +1,6 @@
 import type { SSEEnvelope, SSEEventType } from '@/types/events';
 import { getSession } from './game-session-store';
+import { recordSSEEvent } from './data-collector';
 
 export function emitEvent<T>(
   sessionId: string,
@@ -27,4 +28,7 @@ export function emitEvent<T>(
       session.sseClients.delete(controller);
     }
   }
+
+  // Persist to Convex for replay
+  recordSSEEvent(sessionId, type, payload);
 }
