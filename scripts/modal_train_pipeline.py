@@ -128,12 +128,21 @@ def train(
             _train_vlm(experiment_name, train_path, convex_site_url)
 
         # ── Phase 3: Done ─────────────────────────────────────────────────
+        model_path = f"/checkpoints/experiments/{experiment_name}/merged_model"
+
         update_convex_status(
             convex_site_url, experiment_name,
             status="ready",
         )
         print(f"[pipeline] Training complete: {experiment_name}", flush=True)
-        return {"status": "complete", "experiment_name": experiment_name}
+        print(f"[pipeline] Merged model at: {model_path} (on browser-brawl-checkpoints volume)", flush=True)
+        print(f"[pipeline] To serve, run:", flush=True)
+        print(f"[pipeline]   modal deploy scripts/modal_serve.py --name {experiment_name}", flush=True)
+        return {
+            "status": "complete",
+            "experiment_name": experiment_name,
+            "model_path": model_path,
+        }
 
     except Exception as e:
         print(f"[pipeline] ERROR: {e}", flush=True)

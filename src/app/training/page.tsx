@@ -181,25 +181,38 @@ export default function TrainingPage() {
                     )}
                   </div>
 
-                  {/* Right: actions */}
-                  <div className="flex flex-col gap-2 shrink-0">
-                    {status === 'ready' && (
-                      <span
-                        className="font-mono text-xs px-3 py-1 rounded"
-                        style={{ background: '#22c55e20', color: '#22c55e', border: '1px solid #22c55e40' }}
+                  {/* Right: output info */}
+                  {status === 'ready' && (
+                    <div className="flex flex-col gap-2 shrink-0 max-w-[420px]">
+                      {job.serveUrl && (
+                        <div
+                          className="font-mono text-xs p-2 rounded"
+                          style={{ background: '#cc44ff10', border: '1px solid #cc44ff30' }}
+                        >
+                          <div className="font-bold mb-1" style={{ color: '#cc44ff' }}>Serve URL</div>
+                          <div className="truncate" style={{ color: 'var(--color-text-primary)' }}>{job.serveUrl}</div>
+                        </div>
+                      )}
+                      <div
+                        className="font-mono text-xs p-2 rounded"
+                        style={{ background: '#22c55e10', border: '1px solid #22c55e30' }}
                       >
-                        Deploy with: modal deploy scripts/modal_serve.py --name {job.experimentName}
-                      </span>
-                    )}
-                    {job.serveUrl && (
-                      <span
-                        className="font-mono text-xs px-3 py-1 rounded truncate max-w-[300px]"
-                        style={{ background: '#cc44ff15', color: '#cc44ff', border: '1px solid #cc44ff30' }}
+                        <div className="font-bold mb-1" style={{ color: '#22c55e' }}>Deploy</div>
+                        <div style={{ color: 'var(--color-text-primary)' }}>
+                          modal deploy scripts/modal_serve.py --name {job.experimentName}
+                        </div>
+                      </div>
+                      <div
+                        className="font-mono text-xs p-2 rounded"
+                        style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}
                       >
-                        {job.serveUrl}
-                      </span>
-                    )}
-                  </div>
+                        <div className="font-bold mb-1" style={{ color: 'var(--color-text-secondary)' }}>Model path</div>
+                        <div style={{ color: 'var(--color-text-primary)' }}>
+                          /checkpoints/experiments/{job.experimentName}/merged_model
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
