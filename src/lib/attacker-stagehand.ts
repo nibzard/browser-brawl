@@ -3,13 +3,9 @@ import { getSession } from './game-session-store';
 import { emitEvent } from './sse-emitter';
 import { endGame } from './defender-agent';
 import { nanoid } from 'nanoid';
-import { initLaminar } from './laminar';
 import { recordAttackerStep, captureAndUploadScreenshot } from './data-collector';
 import { snapshotDOM } from './browserbase';
 import type { AttackerStepPayload } from '@/types/events';
-
-// Initialize Laminar so Stagehand's underlying Anthropic calls are traced
-initLaminar();
 
 const MAX_STEPS = 50;
 
