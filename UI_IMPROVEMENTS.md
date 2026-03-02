@@ -2,7 +2,9 @@
 
 ## Summary
 
-This branch contains UI polish and branding changes to the Browser Brawl lobby, history page, and fighter/mode selectors. Below is what was done, what still needs verification, and what a follow-up agent needs to know.
+This branch contains UI polish and branding changes to the Browser Brawl lobby and history page. Below is what was done, what still needs verification, and what a follow-up agent needs to know.
+
+> Note (March 2026 cleanup): several experimental selector components referenced below were removed from `main` because they were unused.
 
 ---
 
@@ -20,13 +22,11 @@ This branch contains UI polish and branding changes to the Browser Brawl lobby, 
 - **`src/types/game.ts`** — `AttackerType` union: `'stagehand'` → `'browserbase'`
 - **`src/lib/attacker-agent.ts`** — Dispatch branch: checks `'browserbase'` instead of `'stagehand'`. Import alias renamed from `runStagehand` to `runBrowserbase`. Still imports from `./attacker-stagehand` (file not renamed).
 - **`src/components/lobby/FighterSelect.tsx`** — Fighter entry: `value: 'browserbase'`, `name: 'BROWSERBASE'`, updated description. **Image path kept as `/fighters/stagehand.jpg`** because no `browserbase.jpg` exists yet.
-- **`src/components/lobby/AttackerTypeSelector.tsx`** — Same renames (unused in V1 but kept in sync).
 - **`src/components/arena/ArenaHeader.tsx`** — `ATTACKER_TYPE_LABELS`: key `'stagehand'` → `'browserbase'`, label `'Stagehand'` → `'Browserbase'`.
 
 ### Playwright MCP → Claude + Playwright Rename
 
 - **`src/components/lobby/FighterSelect.tsx`** — `name: 'PLAYWRIGHT MCP'` → `'CLAUDE + PLAYWRIGHT'`, updated description.
-- **`src/components/lobby/AttackerTypeSelector.tsx`** — Same rename.
 - **`src/components/arena/ArenaHeader.tsx`** — `ATTACKER_TYPE_LABELS['playwright-mcp']`: `'Playwright MCP'` → `'Claude + Playwright'`.
 
 ### Lobby Page (`src/components/lobby/LobbyScreenV1.tsx`)
@@ -44,9 +44,9 @@ This branch contains UI polish and branding changes to the Browser Brawl lobby, 
 - **Custom Arena → Custom Task** — Renamed label and button text.
 - **Hover tooltips** — Added on all arena rows + custom task row using Tailwind `group-hover` pattern. Tooltips show task description for preset arenas, static text for custom.
 
-### Mode Toggle (`src/components/lobby/ModeToggle.tsx`)
+### Mode Toggle
 
-- **Hover tooltips** — Added tooltip field to OPTIONS and rendered via `group-hover`. REALTIME: "Both agents run simultaneously...". TURN-BASED: "Attacker takes N steps, then defender strikes...".
+- **Historical note** — A standalone `ModeToggle` component was used during experimentation, but the current lobby flow no longer imports it.
 
 ### History Page (`src/app/history/page.tsx`)
 
@@ -82,9 +82,7 @@ This branch contains UI polish and branding changes to the Browser Brawl lobby, 
 | `src/lib/attacker-step-logger.ts` | Comment updated |
 | `src/components/lobby/LobbyScreenV1.tsx` | GitHub badge, tagline, sticky bar, Prior Traces |
 | `src/components/lobby/FighterSelect.tsx` | CLAUDE+PLAYWRIGHT, BROWSERBASE renames |
-| `src/components/lobby/AttackerTypeSelector.tsx` | Same renames |
 | `src/components/lobby/ArenaSelector.tsx` | Custom Task rename, hover tooltips |
-| `src/components/lobby/ModeToggle.tsx` | Hover tooltips |
 | `src/components/arena/ArenaHeader.tsx` | Display labels updated |
 | `src/app/history/page.tsx` | GAME HISTORY → PRIOR TRACES |
 | `src/app/api/game/start/route.ts` | Comments updated |
