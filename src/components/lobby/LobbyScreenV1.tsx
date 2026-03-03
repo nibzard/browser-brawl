@@ -50,6 +50,19 @@ export function LobbyScreenV1({ onStart }: Props) {
         GitHub
       </a>
 
+      <Link
+        href="/waitlist"
+        className="fixed top-4 left-4 z-20 inline-flex items-center font-display text-xs font-bold tracking-widest uppercase px-3 py-1.5 transition-all duration-200 hover:scale-105"
+        style={{
+          color: '#cc44ff',
+          background: 'var(--color-bg-panel)',
+          border: '2px solid #cc44ff',
+          textShadow: '0 0 8px #cc44ff',
+        }}
+      >
+        Join Waitlist
+      </Link>
+
       {/* Main content */}
       <div className="flex-1 flex flex-col items-center justify-start lg:justify-center px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
         {/* Title */}
