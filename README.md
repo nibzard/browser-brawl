@@ -31,6 +31,7 @@ Browser Brawl applies this intuition to browser agents:
 
 https://github.com/user-attachments/assets/8b39cff0-88f1-4699-843e-a7a7df85d12a
 
+Watch the full 4 minute demo + explanation at [youtu.be/NIoFXv-JvBY](https://youtu.be/NIoFXv-JvBY)
 
 
 ```mermaid
@@ -83,9 +84,9 @@ This data becomes training trajectories for browser agents.
 
 ---
 
-### One-Click Training Pipeline
+### One-Click SFT Pipeline
 
-Select games on the history page, click **Kickoff Finetune**, and the full pipeline runs automatically — no Python environment or CLI needed.
+We built a PoC fine tuning pipeline that uses Browser Brawl's traces.
 
 ```mermaid
 flowchart LR
@@ -99,15 +100,12 @@ flowchart LR
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | Next.js 16, React 19, TypeScript 5, Tailwind CSS 4 |
-| **LLM** | Anthropic SDK — Claude Sonnet 4 (attacker), Claude Haiku 4.5 (defender) |
+| **LLM** | Anthropic SDK — Claude Sonnet 4.6 (customizable), Claude Haiku 4.5 (defender) |
 | **Cloud Browsers** | Browser-Use API (managed sessions with CDP + live view) |
-| **Real-time Streaming** | Server-Sent Events (SSE) |
 | **Database & Storage** | [Convex](https://convex.dev) (real-time DB + file storage) |
 | **LLM Observability** | [Laminar](https://www.lmnr.ai) (auto-traces all Anthropic calls) |
-| **Protocol** | [Model Context Protocol (MCP)](https://modelcontextprotocol.io) |
 | **Fine-tuning** | Unsloth QLoRA on Modal A10G — Qwen2.5-3B-Instruct |
 | **Serving** | vLLM on Modal, OpenAI-compatible API |
-| **Testing** | Vitest |
 
 ### Supported Browser Agent Frameworks
 
