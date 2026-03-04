@@ -24,15 +24,16 @@ Browser Brawl applies this intuition to browser agents:
 
 ---
 
-## How It Works
-
-### Agents Fighting Demo
+## Demo
 
 
 https://github.com/user-attachments/assets/8b39cff0-88f1-4699-843e-a7a7df85d12a
 
 Watch the full 4 minute demo + explanation at [youtu.be/NIoFXv-JvBY](https://youtu.be/NIoFXv-JvBY)
 
+---
+
+## How It Works
 
 ```mermaid
 flowchart LR
@@ -62,7 +63,7 @@ flowchart LR
 ```
 
 1. **Lobby**
-   Choose a browser agent and a real web task for it to accomplish (Amazon shopping cart, Google Flights, Hacker News), as well as a defender agent difficulty.
+   - Choose a browser agent and a real web task for it to accomplish (Amazon shopping cart, Google Flights, Hacker News), as well as a defender agent difficulty
 
 2. **Arena**  
    - Attacker navigates the website using Playwright tools  
