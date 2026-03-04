@@ -90,7 +90,7 @@ We built a PoC fine tuning pipeline that uses Browser Brawl's traces.
 
 ```mermaid
 flowchart LR
-  H["/history - select games"] --> S["Next.js API Route - fetch & convert"] --> FS["Convex - upload JSONL"] --> K["Modal - fire-and-forget POST"] --> TR["Unsloth QLoRA on A10G"] --> SV["vLLM serve endpoint"]
+  H["/history - select traces"] --> S["Next.js API Route - Anthropic tool_use to ShareGPT to OpenAI Messages"] --> FS["Convex - upload JSONL"] --> K["Modal - fire-and-forget POST"] --> TR["Unsloth QLoRA on A10G"] --> MG["LoRA merge into base model"] --> SV["vLLM serve endpoint"]
 ```
 
 ---
