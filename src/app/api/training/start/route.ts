@@ -111,12 +111,8 @@ export async function POST(request: Request) {
         })),
       };
 
-      // ShareGPT → OpenAI Messages (filter for quality: attacker wins only,
-      // trim incomplete trailing turns, require at least 3 tool calls)
-      const sharegpt = convertTrajectory(trajectory, {
-        minToolCalls: 3,
-        requireAttackerWin: true,
-      });
+      // ShareGPT → OpenAI Messages (trim incomplete trailing turns)
+      const sharegpt = convertTrajectory(trajectory, 1);
       if (!sharegpt) continue;
       const openai = toOpenAIMessages(sharegpt);
       openaiLines.push(JSON.stringify(openai));

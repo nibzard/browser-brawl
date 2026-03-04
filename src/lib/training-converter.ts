@@ -264,7 +264,7 @@ export function convertTrajectory(
       : minStepsOrOptions;
 
   const minToolCalls = opts.minToolCalls ?? 3;
-  const requireAttackerWin = opts.requireAttackerWin ?? true;
+  const requireAttackerWin = opts.requireAttackerWin ?? false;
 
   // Quality filter: only attacker wins with task completion
   if (requireAttackerWin) {

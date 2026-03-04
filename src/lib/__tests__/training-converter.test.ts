@@ -277,34 +277,34 @@ describe('trimIncompleteTrailingTurn', () => {
 // ── convertTrajectory quality filters ─────────────────────────────
 
 describe('convertTrajectory quality filters', () => {
-  it('skips games where defender won (default requireAttackerWin=true)', () => {
+  it('includes defender-win games by default (requireAttackerWin=false)', () => {
     const raw = makeTrajectory({
       winner: 'defender',
       winReason: 'health_depleted',
     });
 
     const result = convertTrajectory(raw);
+    expect(result).not.toBeNull();
+  });
+
+  it('skips defender-win games when requireAttackerWin=true', () => {
+    const raw = makeTrajectory({
+      winner: 'defender',
+      winReason: 'health_depleted',
+    });
+
+    const result = convertTrajectory(raw, { requireAttackerWin: true });
     expect(result).toBeNull();
   });
 
-  it('skips games with unknown winner', () => {
+  it('skips unknown winner games when requireAttackerWin=true', () => {
     const raw = makeTrajectory({
       winner: 'unknown',
       winReason: 'unknown',
     });
 
-    const result = convertTrajectory(raw);
+    const result = convertTrajectory(raw, { requireAttackerWin: true });
     expect(result).toBeNull();
-  });
-
-  it('includes defender-win games when requireAttackerWin=false', () => {
-    const raw = makeTrajectory({
-      winner: 'defender',
-      winReason: 'health_depleted',
-    });
-
-    const result = convertTrajectory(raw, { requireAttackerWin: false });
-    expect(result).not.toBeNull();
   });
 
   it('trims trailing tool results and still produces valid output', () => {
@@ -381,7 +381,7 @@ describe('convertTrajectory quality filters', () => {
       ] as AnthropicMessage[],
     });
 
-    const result = convertTrajectory(raw, { minToolCalls: 0, requireAttackerWin: true });
+    const result = convertTrajectory(raw, { minToolCalls: 0 });
     // After trimming, only the first user message remains → too few messages
     // and even if it had enough, last message is 'human' not 'gpt'
     expect(result).toBeNull();
